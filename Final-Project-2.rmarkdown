@@ -1,0 +1,1419 @@
+---
+title: "Rating Ratings"
+author:  "Karl Evans <br> **a1743822**"
+date: today
+date-format: long
+format: pdf
+editor: visual
+bibliography: MyLibrary.bib
+---
+
+
+\centering
+Report submitted for **MATHS 3021** at the School of Mathematical Sciences, 
+
+University of Adelaide
+
+
+![](UoA_logo_col_vert.jpg){width="50%" fig-align="center"}
+
+
+\flushleft
+Project Area: Data Science
+
+Project Supervisor: Dr Andrew Black
+
+In submitting this work I am indicating that I have read the University's Academic Integrity Policy. I declare that all material in this assessment is my own work except where there is clear acknowledgement and reference to the work of others.
+
+I give permission for this work to be reproduced and submitted to other academic staff for educational purposes.
+
+OPTIONAL: I give permission this work to be reproduced and provided to future students as an exemplar report.
+
+
+{{< pagebreak >}}
+
+
+
+
+% Abstract
+
+\begin{abstract}
+blah blah
+
+blah blah
+\end{abstract}
+
+# 1. Introduction to Rankings and Ratings
+
+A ratings system is an information system that measures success, strength or preference. They are used in a variety of areas: sports, reviews, economics, particularly where objective measures are difficult or limited. Rankings (through transitivity) and ratings allow for comparisons between previously unpaired contestants which make them useful in sports data science for 1) predicting match outcomes and 2) comparing performances across different eras and different leagues.
+
+Ratings and rankings work fundamentally as a comparative tool. Ranking uses pairwise comparisons to create an ordered set, while a rating compares to a performance scale and so the scale is a fundamental factor in any rating system. Ratings automatically generate a ranking while also containing magnitude of strength or preference information.
+
+# 2. Background Elo Ratings
+
+There are hundreds of designs of ratings systems that incorporate various attributes and models. Most can be categorised into Regression, Point-based, Pair-wise comparison, Pooled expert opinion (bookmakers) [@kovalchik_2016]. Elo is a temporal update system that constructs a rating based on prior performance in pairwise contests [@elo_proposed_1967; @elo_rating_1978].
+
+The Elo rating is updated by the (weighted) difference between outcome of the current contest, and the average performance up to that point. The prior performance is believed to be stochastic and best modeled by a Gumbel distribution. Therefore the update of rating following a game uses a logistic function which is the difference in the contestants gumbel performance distribution.
+
+
+$$
+\begin{aligned}
+P(\text{a beats b}) = L\left(\frac{r_a-r_b}{\frac{400}{\log10}}\right) \\
+\end{aligned}
+$$
+
+
+Tennis tournaments elimination structure means that players don't play everyone else in the tournament and the ATP ranking system applies points for wins which doesn't take into account the strength of the opponent. For these reasons an Elo rating system makes measuring a players performance and predicting their future performance more accurate.
+
+# 3. Methods
+
+Data was taken from Jeff Sackmann's github repository [@sackmann_atp_2022]. An Elo rating system was applied in R software where a reference table was created to track and link prior ratings to player IDs and then for each match a player's new rating is the old rating plus the difference between the match score, S, and a logistic function of the difference between prior player ratings, $\mu$, scaled by a factor, K.
+
+
+$$
+\begin{aligned}
+r_{i(new)} = r_{i(old)} + K(S_{ij}-\mu_{ij})
+\end{aligned}
+$$
+
+
+The score, S, can be a proportional match score (as long as $S_{ij}+S_{ji}=1$) but this is not always useful (score differential does not always directly relate to performance). Since the data contians no ties the model is based on a simple indicator function: 
+
+
+$$
+\begin{aligned}
+S_{ij} = \left \{
+\begin{array}{ll}
+      1 & \text{if i beats j} \\
+      0 & \text{if i loses to j} \\
+\end{array} \right.
+\end{aligned}
+$$ 
+
+
+$\mu$ is the base 10 logistic function of the difference between prior player ratings and $\xi$, a constant that controls the variance of player ratings. 
+
+
+$$
+\begin{aligned}
+\mu_{ij} &= \frac{1}{1+10^{-d_{ij}/\xi}} \\
+\text{where } d_{i,j} &= r_{i(old)}-r_{j(old)} \\
+\text{ and } \xi &= \text{constant (controls spread of ratings)}
+\end{aligned}
+$$ 
+
+
+All players were started with an initial rating of 1500. Data is available from 1968 to 2022. It was split by year into a training set with matched played between 1980-2010 and the test set from 2010-2022.
+
+## Quantifying Algorithm Performance
+
+Once a rating system is established there are a number of ways of measuring rating system performance including calibration, discrimination, prediction accuracy and log-loss [@kovalchik_2016]. I have chosen to use the last two.
+
+Accuracy is simply the proportion of matches won by the player with the higher Elo rating: $A=\frac{\sum P}{\sum G}$ where P = matches won by the player with the higher prior rating and G = all matches.
+
+Log loss is a measure of the log distance from the prediction probability and the class (0,1) summed over all observations. It works in a way similar to RMSE in linear regression so a lower score is better.
+
+
+$$
+\begin{aligned}
+logloss_i=-[y_i\ln p_i+(1-y_i) \ln (1-p_i)] \\
+LL=\frac{1}{n}\sum_{i=1}^nlogloss_i
+\end{aligned}
+$$
+
+
+The model was then tuned to improve these performance measures. The data was split by match years into a training set containing the matches between 2000 and 2010 and then applied to a training set using matches from 2010-2020. Firstly by optimising the parameter values K (and $\xi$) and then adjusting the model by 1) using a Cauchy performance probability model 2) limiting the system to the top 50 and top 100 players and finally 3) investigating using different values of K for different playing surfaces.
+
+$\xi$ has the effect of controlling the spread of ratings: $\mu_{ij}=\mu_{ji} \times 10^{\frac{r_i-r_j}{\xi}}$
+
+Using a training set of data from the years 2000-2010.
+
+## Extending Ratings Systems
+
+David Aldous [@aldous_elo_2017], proposes placing an upper limit on the step change in each update by using a Caucy distribution insterad of logistic.
+
+Keeping the same location and scale values (30 and 400, repsectively), the update function uses $\mu$ of:
+
+
+$$
+\begin{aligned}
+\mu_{i,j} = \frac{1}{\pi} \arctan \left(\frac{d_{ij}}{\xi}\right) +0.5
+\end{aligned}
+$$
+
+
+• Investigate how the predictive performance changes with different sets of players, for example the top 50 versus the top 100.
+
+Performance was benchmarked against the FiveThirtyEight data [@morris_serena_2015].
+
+# 4. Results
+
+Using initial parameter values of K = 32 $\xi=400$
+
+![](eloselect.png){fig-align="center"}
+
+## Optimising K and $\xi$
+
+K is a simple scaling factor 10-40
+
+Using manual line search:
+
+
+```{r, include=FALSE}
+pacman::p_load(plyr, tidyverse, tidymodels, vip, ggridges, paletteer, recipes, git2r, elo)
+```
+
+```{r, echo=FALSE}
+#| label: fig-cap
+#| fig-cap: "Optimising K-value"
+data<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/data80_10.csv', show_col_types = FALSE)
+data<-as.data.frame(data)
+#data$Xi<-as.factor(data$Xi)
+#data$K<-as.factor(data$K)
+ggplot(data, aes(x=k))+
+  geom_line(aes(y=AC, color="Accuracy"))+
+  geom_line(aes(y=LL, color="Log Loss"))+
+  ggtitle("K Search") +
+  labs(x="K-value",
+      y="%",
+      color="Legend")
+```
+
+
+Performance measures were maximised with K = 30.
+
+## Forward predictive
+
+2010-2020 Applying this to the testing data giving accuracy of 0.6582 and log loss of 0.6078.
+
+2010-2015 Accuracy 0.6598 Log-loss 0.5996
+
+2012-2013 Accuracy 0.6446 Log-loss 0.6085
+
+2015-2020 Accuracy 0.6394 Log-loss 0.6209
+
+### 1. Cauchy Update Function
+
+Accuracy 0.6515 Log-loss 0.6134
+
+Cauchy performs worse on both measures
+
+### 2. Player Groupings
+
+Top 50 Accuracy 0.6735 Log-loss 0.5986
+
+Top 100 Accuracy 0.6657 Log-loss 0.6057
+
+Higher groupings perform better
+
+### 3. K function
+
+• Can making K a function of other variables, as in the 538 version of the algorithm, improve performance? $\frac{K}{(matches+offset)^{shape}} = \frac{250}{(m(t)+5)^{0.4}}$ with grand slam x1.1
+
+TBC
+
+
+```{r, eval=FALSE, include=FALSE}
+
+```
+
+
+### 4. Match Surface
+
+#### a) Optimise K for each surface
+
+
+```{r, echo=FALSE}
+clay<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/clay.csv', show_col_types = FALSE)
+ggplot(clay, aes(x=kclay))+
+  geom_line(aes(y=ACclay, color="Accuracy"))+
+  geom_line(aes(y=LLclay, color="Log Loss"))+
+  ggtitle("K Search") +
+  labs(x="K-value",
+      y="%",
+      color="Legend")
+```
+
+
+Clay Acc 0.6362 LL 0.6162
+
+
+```{r, echo=FALSE}
+hard<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/hard.csv', show_col_types = FALSE)
+ggplot(hard, aes(x=khard))+
+  geom_line(aes(y=AChard, color="Accuracy"))+
+  geom_line(aes(y=LLhard, color="Log Loss"))+
+  ggtitle("K Search") +
+  labs(x="K-value",
+      y="%",
+      color="Legend")
+```
+
+
+Hard 40 Acc 0.6581 LL 0.6002
+
+
+```{r, echo=FALSE}
+carpet<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/carpet.csv', show_col_types = FALSE)
+ggplot(carpet, aes(x=kcarpet))+
+  geom_line(aes(y=ACcarpet, color="Accuracy"))+
+  geom_line(aes(y=LLcarpet, color="Log Loss"))+
+  ggtitle("K Search") +
+  labs(x="K-value",
+      y="%",
+      color="Legend")
+```
+
+
+K 42 Acc 0.2527 LL 0.6887
+
+
+```{r, echo=FALSE}
+grass<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/grass.csv',, show_col_types = FALSE)
+ggplot(grass, aes(x=kgrass))+
+  geom_line(aes(y=ACgrass, color="Accuracy"))+
+  geom_line(aes(y=LLgrass, color="Log Loss"))+
+  ggtitle("K Search") +
+  labs(x="K-value",
+      y="%",
+      color="Legend")
+```
+
+
+K 54 Acc 0.6117 LL 0.6273
+
+K Clay 37 Hard 40 Carpet 42 Grass 54
+
+AC 0.6592 LL 0.6004
+
+Worse than constant K?
+
+### 5. Other performance quanitfiers?
+
+time, seasons?, re-setting ratings at end of season?, match frequency?
+
+TBC
+
+###### 5-1. Discard Data
+
+Consider what data should be used or discarded. For example, many matches are classed as a walkover or end because of retirement. Should these be included in your dataset?
+
+#### 5-2. Weighting: straight sets, surfaces, time
+
+time weighting $w_{ij} = \frac{t-t_0}{t_f-t_0}$ or $w_{ij}= (\frac{1+t-t_0}{1+t_f-t_0})^2$
+
+TBC
+
+#### 5-3. Starting rating
+
+TBC
+
+#### 5-4. Score information
+
+In many sports score differential doesn't matter: It's not preferential to have a big score difference. But in tennis a more lopsided score usually means a shorter match. Straight sets or just quicker sets. Difference in scores $~N(f(S_a-S_b), \sigma)$
+
+TBC
+
+# 5. Conclusion
+
+Validation: FiveThirtyEight Accuracy 0.70 Log-loss 0.59 [@kovalchik_2016] BCM Accuracy 0.72 Log-loss 0.55 [@kovalchik_2016]
+
+# References
+
+::: {#refs}
+:::
+
+# A Appendix 1 Implementation
+
+
+```{r, warning=FALSE, eval=FALSE}
+tennis68_22 <- list.files(path='/Users/karlevans/Documents/Uni/Capstone Project/Capstone/tennis_atp/ATP Matches',
+                          full.names = TRUE) %>% 
+  ldply(readr::read_csv, show_col_types=FALSE) #%>% 
+ # bind_rows 
+
+tennis68_22<-tennis68_22|>
+  mutate(tourney_date=as.Date(as.character(tennis68_22$tourney_date), "%Y%m%d"))
+write.csv(tennis68_22, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis68_22.csv', row.names=FALSE)
+
+tennis00_10<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"1999-12-31"&tennis68_22$tourney_date<"2011-01-01")
+write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10.csv', row.names=FALSE)
+
+tennis80_10<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"1979-12-31"&tennis68_22$tourney_date<"2011-01-01")
+write.csv(tennis80_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv', row.names=FALSE)
+
+tennis10_20<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"2009-12-31"&tennis68_22$tourney_date<"2021-01-01")
+write.csv(tennis10_20, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_20.csv', row.names=FALSE)
+
+tennis10_15<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"2009-12-31"&tennis68_22$tourney_date<"2016-01-01")
+write.csv(tennis10_15, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv', row.names=FALSE)
+
+tennis15_20<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"2014-12-31"&tennis68_22$tourney_date<"2021-01-01")
+write.csv(tennis15_20, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis15_20.csv', row.names=FALSE)
+
+tennis12_13<-tennis68_22|>
+  filter(tennis68_22$tourney_date>"2011-12-31"&tennis68_22$tourney_date<"2014-01-01")
+write.csv(tennis12_13, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis12_13.csv', row.names=FALSE)
+```
+
+```{r, include=FALSE, eval=FALSE}
+k=c()
+AC=c()
+LL=c()
+xi=c()
+```
+
+
+TRAINING
+
+
+```{r, eval=FALSE, include=FALSE}
+doParallel::registerDoParallel()
+
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+id<-c(tennis80_10$loser_id, tennis80_10$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=28 
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis80_10$winner_id[i]) #
+ m=which(ELO$id==tennis80_10$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis80_10$winner_rating_before[i]=ELO$rating[n]
+  tennis80_10$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis80_10$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis80_10$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis80_10$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis80_10$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+k=c(k,K)
+xi=c(xi,Xi)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis80_10<-tennis80_10|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis80_10<-tennis80_10|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis80_10$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis80_10$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+AC=c(AC, p)
+#LOG LOSS
+tennis80_10$y<-as.numeric(tennis80_10$y)    # player with higher rating wins
+tennis80_10 <-tennis80_10|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis80_10$logloss)
+LL=c(LL,l)
+```
+
+```{r, eval=FALSE, include=FALSE}
+data80_10=cbind(k,xi,AC,LL)
+
+#data=rbind(data1, data2, data3)
+write.csv(data80_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/data80_10.csv', row.names=FALSE)
+```
+
+
+TESTING
+
+
+```{r, eval=FALSE, include=FALSE}
+doParallel::registerDoParallel()
+
+tennis12_13<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis12_13.csv')
+l=nrow(tennis12_13)
+tennis12_13<-tennis12_13 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis12_13<-tennis12_13 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+id<-c(tennis12_13$loser_id, tennis12_13$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=30
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis12_13$winner_id[i]) #
+ m=which(ELO$id==tennis12_13$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis12_13$winner_rating_before[i]=ELO$rating[n]
+  tennis12_13$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis12_13$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis12_13$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis12_13$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis12_13$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis12_13<-tennis12_13|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis12_13<-tennis12_13|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis12_13$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis12_13$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis12_13$y<-as.numeric(tennis12_13$y)    # player with higher rating wins
+tennis12_13 <-tennis12_13|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis12_13$logloss)
+l
+```
+
+
+# Appendix 2 Cauchy
+
+
+```{r, eval=FALSE}
+tennis10_20<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_20.csv')
+l=nrow(tennis10_20)
+tennis10_20<-tennis10_20 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_20<-tennis10_20 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+id<-c(tennis10_20$loser_id, tennis10_20$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=30
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis10_20$winner_id[i]) #
+ m=which(ELO$id==tennis10_20$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_20$winner_rating_before[i]=ELO$rating[n]
+  tennis10_20$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=(1/pi)*atan(di/Xi)+0.5                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_20$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_20$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=(1/pi)*atan(dj/Xi)+0.5
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_20$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_20$p[i]=muj
+  }
+}
+write.csv(tennis10_20, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_20_cauchy.csv', row.names=FALSE)
+
+tennis10_20<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_20_cauchy.csv')
+l=nrow(tennis10_20)
+tennis10_20<-tennis10_20|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_20<-tennis10_20|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w2<-sum(tennis10_20$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis10_20$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+p3
+tennis10_20$y<-as.numeric(tennis10_20$y)    # player with higher rating wins
+tennis10_20 <-tennis10_20|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis10_20$logloss)
+l3
+```
+
+
+# Appendix 3 Player Groupings
+
+
+```{r, echo=FALSE, eval=FALSE}
+tennis10_20_top50<-tennis10_20|>
+  filter(winner_rank<50&loser_rank<50)
+w2<-sum(tennis10_20_top50$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis10_20_top50$pred_win > -Inf, na.rm=TRUE)
+p4=w2/t2
+
+tennis10_20_top50$y<-as.numeric(tennis10_20_top50$y)    # player with higher rating wins
+tennis10_20_top50 <-tennis10_20_top50|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l4=mean(tennis10_20_top50$logloss)
+l4
+p4
+```
+
+```{r, echo=FALSE, eval=FALSE}
+tennis10_20_top100<-tennis10_20|>
+  filter(winner_rank<100&loser_rank<100)
+
+w2<-sum(tennis10_20_top100$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis10_20_top100$pred_win > -Inf, na.rm=TRUE)
+p5=w2/t2
+
+
+tennis10_20_top100$y<-as.numeric(tennis10_20_top100$y)    # player with higher rating wins
+tennis10_20_top100 <-tennis10_20_top100|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l5=mean(tennis10_20_top100$logloss)
+p5
+l5
+```
+
+
+# Appendix 4 Match Surfaces
+
+
+```{r, eval=FALSE}
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis80_10$surface<-as_factor(tennis80_10$surface)
+```
+
+```{r, include=FALSE, eval=FALSE}
+kclay=c()
+ACclay=c()
+LLclay=c()
+```
+
+
+## A. Clay
+
+
+```{r, eval=FALSE, include=FALSE}
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis80_10$surface<-as_factor(tennis80_10$surface)
+tennis80_10_clay<-tennis80_10|>
+  filter(surface=='Clay')
+
+l=nrow(tennis80_10_clay)
+
+id<-c(tennis80_10_clay$loser_id, tennis80_10_clay$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=43
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis80_10_clay$winner_id[i]) #
+ m=which(ELO$id==tennis80_10_clay$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis80_10_clay$winner_rating_before[i]=ELO$rating[n]
+  tennis80_10_clay$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis80_10_clay$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis80_10_clay$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi)) 
+  new_ratingj=ratingj+K*(0-muj)
+  tennis80_10_clay$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis80_10_clay$p[i]=muj
+  }
+}
+write.csv(tennis80_10_clay, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_22_clay.csv', row.names=FALSE)
+
+kclay=c(kclay,K)
+
+tennis80_10_clay<-tennis80_10_clay|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis80_10_clay<-tennis80_10_clay|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+
+w2<-sum(tennis80_10_clay$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis80_10_clay$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+ACclay=c(ACclay, p3)
+
+tennis80_10_clay$y<-as.numeric(tennis80_10_clay$y)    # player with higher rating wins
+tennis80_10_clay <-tennis80_10_clay|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis80_10_clay$logloss)
+LLclay=c(LLclay,l3)
+```
+
+```{r, include=FALSE, eval=FALSE}
+clay=cbind(kclay, ACclay, LLclay)
+write.csv(clay, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/clay.csv', row.names=FALSE)
+```
+
+```{r, eval=FALSE}
+clay<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/clay.csv')
+ggplot(clay)+
+  geom_line(aes(x=kclay, y=ACclay))+
+  geom_line(aes(x=kclay, y=LLclay), col='red')+
+  ylab("Accuracy and Log-Loss (red)")
+```
+
+
+TESTING
+
+
+```{r, eval=FALSE}
+tennis10_15<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv')
+
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis10_15$surface<-as_factor(tennis10_15$surface)
+tennis10_15_clay<-tennis10_15|>
+  filter(surface=='Clay')
+l=nrow(tennis10_15_clay)
+id<-c(tennis10_15_clay$loser_id, tennis10_15_clay$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=37
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis10_15_clay$winner_id[i]) #
+ m=which(ELO$id==tennis10_15_clay$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_15_clay$winner_rating_before[i]=ELO$rating[n]
+  tennis10_15_clay$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_15_clay$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_15_clay$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_15_clay$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_15_clay$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis10_15_clay<-tennis10_15_clay|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_15_clay<-tennis10_15_clay|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis10_15_clay$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis10_15_clay$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis10_15_clay$y<-as.numeric(tennis10_15_clay$y)    # player with higher rating wins
+tennis10_15_clay <-tennis10_15_clay|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis10_15_clay$logloss)
+l
+```
+
+
+Clay: K=37
+
+## B. Hard
+
+
+```{r, include=FALSE, eval=FALSE}
+khard=c()
+AChard=c()
+LLhard=c()
+```
+
+```{r, eval=FALSE, include=FALSE}
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis80_10$surface<-as_factor(tennis80_10$surface)
+tennis80_10_hard<-tennis80_10|>
+  filter(surface=='Hard')
+
+l=nrow(tennis80_10_hard)
+
+id<-c(tennis80_10_hard$loser_id, tennis80_10_hard$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=38
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis80_10_hard$winner_id[i]) #
+ m=which(ELO$id==tennis80_10_hard$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis80_10_hard$winner_rating_before[i]=ELO$rating[n]
+  tennis80_10_hard$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis80_10_hard$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis80_10_hard$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi)) 
+  new_ratingj=ratingj+K*(0-muj)
+  tennis80_10_hard$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis80_10_hard$p[i]=muj
+  }
+}
+write.csv(tennis80_10_hard, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_22_hard.csv', row.names=FALSE)
+
+khard=c(khard,K)
+
+tennis80_10_hard<-tennis80_10_hard|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis80_10_hard<-tennis80_10_hard|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+
+w2<-sum(tennis80_10_hard$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis80_10_hard$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+AChard=c(AChard, p3)
+
+tennis80_10_hard$y<-as.numeric(tennis80_10_hard$y)    # player with higher rating wins
+tennis80_10_hard <-tennis80_10_hard|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis80_10_hard$logloss)
+LLhard=c(LLhard,l3)
+```
+
+```{r, include=FALSE, eval=FALSE}
+hard=cbind(khard, AChard, LLhard)
+write.csv(hard, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/hard.csv', row.names=FALSE)
+```
+
+```{r, eval=FALSE}
+hard<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/hard.csv')
+ggplot(hard)+
+  geom_line(aes(x=khard, y=AChard))+
+  geom_line(aes(x=khard, y=LLhard), col='red')+
+  ylab("Accuracy and Log-Loss (red)")
+```
+
+
+TESTING
+
+
+```{r, eval=FALSE}
+tennis10_15<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv')
+l=nrow(tennis10_15)
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis10_15$surface<-as_factor(tennis10_15$surface)
+tennis10_15_hard<-tennis10_15|>
+  filter(surface=='Hard')
+l=nrow(tennis10_15_hard)
+id<-c(tennis10_15_hard$loser_id, tennis10_15_hard$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=40
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis10_15_hard$winner_id[i]) #
+ m=which(ELO$id==tennis10_15_hard$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_15_hard$winner_rating_before[i]=ELO$rating[n]
+  tennis10_15_hard$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_15_hard$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_15_hard$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_15_hard$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_15_hard$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis10_15_hard<-tennis10_15_hard|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_15_hard<-tennis10_15_hard|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis10_15_hard$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis10_15_hard$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis10_15_hard$y<-as.numeric(tennis10_15_hard$y)    # player with higher rating wins
+tennis10_15_hard <-tennis10_15_hard|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis10_15_hard$logloss)
+l
+```
+
+
+Hard K = 40
+
+## C. Carpet
+
+
+```{r, include==FALSE, eval=FALSE}
+kcarpet=c()
+ACcarpet=c()
+LLcarpet=c()
+```
+
+```{r, eval=FALSE, include=FALSE}
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis80_10$surface<-as_factor(tennis80_10$surface)
+
+tennis80_10_carpet<-tennis80_10|>
+  filter(surface=='Carpet')
+
+l=nrow(tennis80_10_carpet)
+
+id<-c(tennis80_10_carpet$loser_id, tennis80_10_carpet$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=43
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis80_10_carpet$winner_id[i]) #
+ m=which(ELO$id==tennis80_10_carpet$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis80_10_carpet$winner_rating_before[i]=ELO$rating[n]
+  tennis80_10_carpet$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis80_10_carpet$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis80_10_carpet$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi)) 
+  new_ratingj=ratingj+K*(0-muj)
+  tennis80_10_carpet$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis80_10_carpet$p[i]=muj
+  }
+}
+write.csv(tennis80_10_carpet, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_22_carpet.csv', row.names=FALSE)
+
+kcarpet=c(kcarpet,K)
+
+tennis80_10_carpet<-tennis80_10_carpet|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis80_10_carpet<-tennis80_10_carpet|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+
+w2<-sum(tennis80_10_carpet$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis80_10_carpet$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+ACcarpet=c(ACcarpet, p3)
+
+tennis80_10_carpet$y<-as.numeric(tennis80_10_carpet$y)    # player with higher rating wins
+tennis80_10_carpet <-tennis80_10_carpet|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis80_10_carpet$logloss)
+LLcarpet=c(LLcarpet,l3)
+```
+
+```{r, include=FALSE, eval=FALSE}
+carpet=cbind(kcarpet, ACcarpet, LLcarpet)
+write.csv(carpet, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/carpet.csv', row.names=FALSE)
+```
+
+```{r, eval=FALSE}
+carpet<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/carpet.csv')
+ggplot(carpet)+
+  geom_line(aes(x=kcarpet, y=ACcarpet))+
+  geom_line(aes(x=kcarpet, y=LLcarpet), col='red')+
+  ylab("Accuracy and Log-Loss (red)")
+```
+
+
+Carpet K = 12
+
+TESTING
+
+
+```{r, eval=FALSE}
+tennis10_15<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv')
+l=nrow(tennis10_15)
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis10_15$surface<-as_factor(tennis10_15$surface)
+tennis10_15_carpet<-tennis10_15|>
+  filter(surface=='Carpet')
+l=nrow(tennis10_15_carpet)
+id<-c(tennis10_15_carpet$loser_id, tennis10_15_carpet$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=42
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis10_15_carpet$winner_id[i]) #
+ m=which(ELO$id==tennis10_15_carpet$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_15_carpet$winner_rating_before[i]=ELO$rating[n]
+  tennis10_15_carpet$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_15_carpet$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_15_carpet$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_15_carpet$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_15_carpet$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis10_15_carpet<-tennis10_15_carpet|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_15_carpet<-tennis10_15_carpet|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis10_15_carpet$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis10_15_carpet$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis10_15_carpet$y<-as.numeric(tennis10_15_carpet$y)    # player with higher rating wins
+tennis10_15_carpet <-tennis10_15_carpet|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis10_15_carpet$logloss)
+l
+```
+
+
+## D. Grass
+
+
+```{r, include=FALSE, eval=FALSE}
+kgrass=c()
+ACgrass=c()
+LLgrass=c()
+```
+
+```{r, eval=FALSE, include=FALSE}
+tennis80_10<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_10.csv')
+l=nrow(tennis80_10)
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis80_10<-tennis80_10 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis80_10$surface<-as_factor(tennis80_10$surface)
+
+tennis80_10_grass<-tennis80_10|>
+  filter(surface=='Grass')
+
+l=nrow(tennis80_10_grass)
+
+id<-c(tennis80_10_grass$loser_id, tennis80_10_grass$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=54
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis80_10_grass$winner_id[i]) #
+ m=which(ELO$id==tennis80_10_grass$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis80_10_grass$winner_rating_before[i]=ELO$rating[n]
+  tennis80_10_grass$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis80_10_grass$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis80_10_grass$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi)) 
+  new_ratingj=ratingj+K*(0-muj)
+  tennis80_10_grass$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis80_10_grass$p[i]=muj
+  }
+}
+#write.csv(tennis80_10_grass, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis80_22_grass.csv', row.names=FALSE)
+
+kgrass=c(kgrass,K)
+
+tennis80_10_grass<-tennis80_10_grass|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis80_10_grass<-tennis80_10_grass|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+
+w2<-sum(tennis80_10_grass$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis80_10_grass$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+ACgrass=c(ACgrass, p3)
+
+tennis80_10_grass$y<-as.numeric(tennis80_10_grass$y)    # player with higher rating wins
+tennis80_10_grass <-tennis80_10_grass|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis80_10_grass$logloss)
+LLgrass=c(LLgrass,l3)
+```
+
+```{r, include=FALSE, eval=FALSE}
+grass=cbind(kgrass, ACgrass, LLgrass)
+write.csv(grass, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/grass.csv', row.names=FALSE)
+```
+
+```{r, eval=FALSE}
+grass<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/grass.csv')
+ggplot(grass)+
+  geom_line(aes(x=kgrass, y=ACgrass))+
+  geom_line(aes(x=kgrass, y=LLgrass), col='red')+
+  ylab("Accuracy and Log-Loss (red)")
+```
+
+
+TESTING
+
+
+```{r, eval=FALSE}
+tennis10_15<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv')
+l=nrow(tennis10_15)
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+tennis10_15$surface<-as_factor(tennis10_15$surface)
+tennis10_15_grass<-tennis10_15|>
+  filter(surface=='Grass')
+l=nrow(tennis10_15_grass)
+id<-c(tennis10_15_grass$loser_id, tennis10_15_grass$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+K=54
+Xi=400
+
+for (i in 1:l){
+ n=which(ELO$id==tennis10_15_grass$winner_id[i]) #
+ m=which(ELO$id==tennis10_15_grass$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_15_grass$winner_rating_before[i]=ELO$rating[n]
+  tennis10_15_grass$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_15_grass$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_15_grass$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_15_grass$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_15_grass$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis10_15_grass<-tennis10_15_grass|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_15_grass<-tennis10_15_grass|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis10_15_grass$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis10_15_grass$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis10_15_grass$y<-as.numeric(tennis10_15_grass$y)    # player with higher rating wins
+tennis10_15_grass <-tennis10_15_grass|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis10_15_grass$logloss)
+l
+```
+
+
+Grass K = 55
+
+### Implement variable K for surface over 1990-2020:
+
+
+```{r, eval=FALSE}
+tennis10_15<-read_csv('/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis10_15.csv')
+tennis10_15$surface<-as_factor(tennis10_15$surface)
+l=nrow(tennis10_15)
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating=c(rep(NA,l)), loser_rating=c(rep(NA,l)), p=c(rep(NA,l)))
+tennis10_15<-tennis10_15 %>% tibble::add_column(winner_rating_before=c(rep(NA,l)), loser_rating_before=c(rep(NA,l)))
+
+id<-c(tennis10_15$loser_id, tennis10_15$winner_id)
+id<-unique(id)
+rating<-c(rep(1500,length(id)))
+ELO<-cbind(id, rating)
+ELO<-as.data.frame(ELO)
+
+#K=37
+Xi=400
+
+for (i in 1:l){
+  if(tennis10_15$surface[i]=='Hard'){
+    K=40
+  }else if (tennis10_15$surface[i]=='Carpet'){
+    K=42
+  }else if(tennis10_15$surface[i]=='Clay'){
+    K=37
+  }else{
+    K=54}
+  
+   n=which(ELO$id==tennis10_15$winner_id[i]) #
+ m=which(ELO$id==tennis10_15$loser_id[i])  # match IDs
+  ratingi=ELO$rating[n]                    #
+  ratingj=ELO$rating[m]                    # pull old ratings
+
+  tennis10_15$winner_rating_before[i]=ELO$rating[n]
+  tennis10_15$loser_rating_before[i]=ELO$rating[m]
+  
+  di=ratingi-ratingj                       #
+  dj=-di                                   # calc differences
+  
+  mui=1/(1+10^(-di/Xi))                     # calc logistic mu
+  new_ratingi=ratingi+K*(1-mui)             # calc ELO
+  tennis10_15$winner_rating[i]=new_ratingi  # populate rating in dataframe
+  tennis10_15$p[i]=mui
+  ELO$rating[n]=new_ratingi                 # update rating in reference table
+  
+  muj=1/(1+10^(-dj/Xi))
+  new_ratingj=ratingj+K*(0-muj)
+  tennis10_15$loser_rating[i]=new_ratingj
+  ELO$rating[m]=new_ratingj
+  
+  if (muj>mui){
+  tennis10_15$p[i]=muj
+  }
+}
+#write.csv(tennis00_10, '/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv', row.names=FALSE)
+
+#ACCURACY
+#tennis00_10<-readr::read_csv("/Users/karlevans/Documents/Uni/Capstone Project/Capstone/Data 3/tennis00_10_rated.csv", show_col_types = FALSE)
+
+tennis10_15<-tennis10_15|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis10_15<-tennis10_15|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+w<-sum(tennis10_15$pred_win > 0, na.rm=TRUE)
+t<-sum(tennis10_15$pred_win > -Inf, na.rm=TRUE)
+p=w/t
+p
+#LOG LOSS
+tennis10_15$y<-as.numeric(tennis10_15$y)    # player with higher rating wins
+tennis10_15 <-tennis10_15|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l=mean(tennis10_15$logloss)
+l
+```
+
+```{r, include=FALSE, eval=FALSE}
+tennis00_10<-rbind(tennis00_10_carpet, tennis00_10_clay, tennis00_10_grass, tennis00_10_hard)
+
+tennis00_10<-tennis00_10|> 
+  mutate(pred_win=winner_rating_before-loser_rating_before)
+tennis00_10<-tennis00_10|> 
+  mutate(y=ifelse(pred_win>0, 1, 0))
+
+w2<-sum(tennis00_10$pred_win > 0, na.rm=TRUE)
+t2<-sum(tennis00_10$pred_win > -Inf, na.rm=TRUE)
+p3=w2/t2
+
+tennis00_10$y<-as.numeric(tennis00_10$y)    # player with higher rating wins
+tennis00_10 <-tennis00_10|>
+mutate(logloss=-(y*log(p)+(1-y)*log(1-p)))  # p is prob player with higher rating wins
+l3=mean(tennis00_10$logloss)
+```
+
+
+# Appendix 5 Other factors
+
+## Score
+
+
+```{r, eval=FALSE}
+tennis90_22$score <-stringr::str_remove_all(tennis90_22$score,"[- ]")
+
+tennis90_22$score<-as.numeric(tennis90_22$score)
+tennis90_22<-tennis90_22|>
+  mutate(no_sets=ceiling(log(score,base=10)/2))
+
+tennis90_22<-tennis90_22|>
+  mutate(straight_sets=ifelse(no_sets==best_of, "no","yes"))
+
+add_alternate(646761)[2]
+```
+
+```{r, eval=FALSE}
+add_alternate_vec <- Vectorize(add_alternate, vectorize.args = "n")
+
+tennis90_22$win_score<-add_alternate_vec(tennis90_22$score)[1]
+tennis90_22$win_score<-add_alternate(tennis90_22$score)[1]
+
+add_alternate(646256)
+n=64626
+n>0
+ceiling(log(n, base=10))%%2==0
+```
+
